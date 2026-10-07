@@ -1,1 +1,9 @@
-[]
+[
+    {
+        "title": "Interstellar",
+        "genre": "Sci-Fi",
+        "year": 2014,
+        "rating": 9.2,
+        "watched": false
+    }
+]
