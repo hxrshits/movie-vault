@@ -7,7 +7,8 @@ MOVIE_FILE = "movies.json"
 def load_movies():
     try:
         with open(MOVIE_FILE, "r") as file:
-            return json.load(file)
+            movies = json.load(file)
+            return movies if isinstance(movies, list) else []
     except (FileNotFoundError, json.JSONDecodeError):
         return []
 
@@ -79,9 +80,13 @@ def search_movie():
     movies = load_movies()
     query = input("\nEnter movie title to search: ").strip().lower()
 
+    if not query:
+        print("Please enter a movie title.")
+        return
+
     results = [
         movie for movie in movies
-        if query and query in movie.get("title", "").lower()
+        if query in movie.get("title", "").lower()
     ]
 
     if not results:
@@ -108,7 +113,6 @@ def select_movie(movies):
         choice = int(input("Select movie number: "))
         if 1 <= choice <= len(movies):
             return movies[choice - 1]
-
         print("Invalid movie number.")
     except ValueError:
         print("Please enter a valid number.")
@@ -152,6 +156,50 @@ def update_rating():
         print("Please enter a valid number.")
 
 
+def top_rated_movies():
+    movies = load_movies()
+
+    if not movies:
+        print("No movies available.")
+        return
+
+    ranked = sorted(
+        movies,
+        key=lambda movie: float(movie.get("rating", 0)),
+        reverse=True
+    )
+
+    print("\n--- Top-Rated Movies ---")
+
+    for index, movie in enumerate(ranked[:10], start=1):
+        print(
+            f"{index}. {movie['title']} "
+            f"| Rating: {movie.get('rating', 0)}/10 "
+            f"| Year: {movie.get('year', 'Unknown')}"
+        )
+
+
+def show_statistics():
+    movies = load_movies()
+    total = len(movies)
+
+    watched = sum(
+        1 for movie in movies if movie.get("watched", False)
+    )
+    unwatched = total - watched
+
+    average = (
+        sum(float(movie.get("rating", 0)) for movie in movies) / total
+        if total else 0
+    )
+
+    print("\n--- MovieVault Statistics ---")
+    print(f"Total movies: {total}")
+    print(f"Watched: {watched}")
+    print(f"Unwatched: {unwatched}")
+    print(f"Average rating: {average:.2f}/10")
+
+
 def main():
     while True:
         print("\n================================")
@@ -163,7 +211,9 @@ def main():
         print("3. Search Movie")
         print("4. Mark Watched/Unwatched")
         print("5. Update Rating")
-        print("6. Exit")
+        print("6. Top-Rated Movies")
+        print("7. Statistics")
+        print("8. Exit")
 
         choice = input("\nEnter your choice: ").strip()
 
@@ -178,10 +228,14 @@ def main():
         elif choice == "5":
             update_rating()
         elif choice == "6":
+            top_rated_movies()
+        elif choice == "7":
+            show_statistics()
+        elif choice == "8":
             print("Thanks for using MovieVault!")
             break
         else:
-            print("Invalid choice. Please select 1-6.")
+            print("Invalid choice. Please select 1-8.")
 
 
 if __name__ == "__main__":
