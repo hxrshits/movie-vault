@@ -1,5 +1,6 @@
 
 import json
+import os
 
 MOVIE_FILE = "movies.json"
 
@@ -7,15 +8,21 @@ MOVIE_FILE = "movies.json"
 def load_movies():
     try:
         with open(MOVIE_FILE, "r") as file:
-            movies = json.load(file)
-            return movies if isinstance(movies, list) else []
-    except (FileNotFoundError, json.JSONDecodeError):
+            data = json.load(file)
+            return data if isinstance(data, list) else []
+    except FileNotFoundError:
+        return []
+    except json.JSONDecodeError:
+        print("Warning: Movie data file is corrupted.")
         return []
 
 
 def save_movies(movies):
-    with open(MOVIE_FILE, "w") as file:
-        json.dump(movies, file, indent=4)
+    try:
+        with open(MOVIE_FILE, "w") as file:
+            json.dump(movies, file, indent=4)
+    except OSError as error:
+        print(f"Error saving movies: {error}")
 
 
 def add_movie():
@@ -26,14 +33,20 @@ def add_movie():
         print("Movie name cannot be empty.")
         return
 
-    genre = input("Genre: ").strip()
+    movies = load_movies()
+
+    if any(m["title"].lower() == title.lower() for m in movies):
+        print("This movie already exists!")
+        return
+
+    genre = input("Genre: ").strip() or "Unknown"
 
     try:
         year = int(input("Release year: "))
         rating = float(input("Rating (0-10): "))
 
         if not 1888 <= year <= 2100:
-            print("Please enter a valid release year.")
+            print("Invalid release year.")
             return
 
         if not 0 <= rating <= 10:
@@ -41,10 +54,9 @@ def add_movie():
             return
 
     except ValueError:
-        print("Please enter a valid year and rating.")
+        print("Please enter valid numeric values.")
         return
 
-    movies = load_movies()
     movies.append({
         "title": title,
         "genre": genre,
@@ -54,7 +66,7 @@ def add_movie():
     })
 
     save_movies(movies)
-    print(f"Movie '{title}' added successfully!")
+    print(f"'{title}' added successfully!")
 
 
 def view_movies():
@@ -76,34 +88,9 @@ def view_movies():
         print(f"   Status: {status}")
 
 
-def search_movie():
-    movies = load_movies()
-    query = input("\nEnter movie title to search: ").strip().lower()
-
-    if not query:
-        print("Please enter a movie title.")
-        return
-
-    results = [
-        movie for movie in movies
-        if query in movie.get("title", "").lower()
-    ]
-
-    if not results:
-        print("No matching movies found.")
-        return
-
-    print("\n--- Search Results ---")
-    for movie in results:
-        print(
-            f"{movie['title']} ({movie.get('year', 'Unknown')}) "
-            f"| Rating: {movie.get('rating', 0)}/10"
-        )
-
-
 def select_movie(movies):
     if not movies:
-        print("No movies available. Add a movie first.")
+        print("No movies available.")
         return None
 
     for index, movie in enumerate(movies, start=1):
@@ -111,34 +98,57 @@ def select_movie(movies):
 
     try:
         choice = int(input("Select movie number: "))
+
         if 1 <= choice <= len(movies):
-            return movies[choice - 1]
+            return choice - 1
+
         print("Invalid movie number.")
+
     except ValueError:
-        print("Please enter a valid number.")
+        print("Enter a valid number.")
 
     return None
 
 
-def toggle_watched():
+def search_movie():
     movies = load_movies()
-    movie = select_movie(movies)
+    query = input("Enter movie title: ").strip().lower()
 
-    if movie is None:
+    if not query:
+        print("Search cannot be empty.")
         return
 
-    movie["watched"] = not movie.get("watched", False)
+    results = [
+        m for m in movies
+        if query in m.get("title", "").lower()
+    ]
+
+    if not results:
+        print("No matching movies found.")
+        return
+
+    for movie in results:
+        print(f"{movie['title']} | {movie.get('year')} | {movie.get('rating')}/10")
+
+
+def toggle_watched():
+    movies = load_movies()
+    index = select_movie(movies)
+
+    if index is None:
+        return
+
+    movies[index]["watched"] = not movies[index].get("watched", False)
     save_movies(movies)
 
-    status = "Watched" if movie["watched"] else "Not Watched"
-    print(f"{movie['title']} marked as {status}!")
+    print(f"Updated status for {movies[index]['title']}!")
 
 
 def update_rating():
     movies = load_movies()
-    movie = select_movie(movies)
+    index = select_movie(movies)
 
-    if movie is None:
+    if index is None:
         return
 
     try:
@@ -148,12 +158,12 @@ def update_rating():
             print("Rating must be between 0 and 10.")
             return
 
-        movie["rating"] = rating
+        movies[index]["rating"] = rating
         save_movies(movies)
-        print(f"Rating updated for {movie['title']}!")
+        print("Rating updated successfully!")
 
     except ValueError:
-        print("Please enter a valid number.")
+        print("Invalid rating.")
 
 
 def top_rated_movies():
@@ -165,39 +175,68 @@ def top_rated_movies():
 
     ranked = sorted(
         movies,
-        key=lambda movie: float(movie.get("rating", 0)),
+        key=lambda m: float(m.get("rating", 0)),
         reverse=True
     )
 
-    print("\n--- Top-Rated Movies ---")
+    print("\n--- Top Rated Movies ---")
 
     for index, movie in enumerate(ranked[:10], start=1):
-        print(
-            f"{index}. {movie['title']} "
-            f"| Rating: {movie.get('rating', 0)}/10 "
-            f"| Year: {movie.get('year', 'Unknown')}"
-        )
+        print(f"{index}. {movie['title']} | {movie.get('rating', 0)}/10")
 
 
 def show_statistics():
     movies = load_movies()
     total = len(movies)
 
-    watched = sum(
-        1 for movie in movies if movie.get("watched", False)
-    )
-    unwatched = total - watched
-
+    watched = sum(1 for m in movies if m.get("watched", False))
     average = (
-        sum(float(movie.get("rating", 0)) for movie in movies) / total
+        sum(float(m.get("rating", 0)) for m in movies) / total
         if total else 0
     )
 
     print("\n--- MovieVault Statistics ---")
     print(f"Total movies: {total}")
     print(f"Watched: {watched}")
-    print(f"Unwatched: {unwatched}")
+    print(f"Unwatched: {total - watched}")
     print(f"Average rating: {average:.2f}/10")
+
+
+def filter_genre():
+    movies = load_movies()
+    genre = input("Enter genre: ").strip().lower()
+
+    results = [
+        m for m in movies
+        if genre and genre in m.get("genre", "").lower()
+    ]
+
+    if not results:
+        print("No movies found in this genre.")
+        return
+
+    print("\n--- Genre Results ---")
+
+    for movie in results:
+        print(f"{movie['title']} | {movie['genre']} | {movie['rating']}/10")
+
+
+def delete_movie():
+    movies = load_movies()
+    index = select_movie(movies)
+
+    if index is None:
+        return
+
+    title = movies[index]["title"]
+    confirm = input(f"Delete '{title}'? (y/n): ").strip().lower()
+
+    if confirm == "y":
+        movies.pop(index)
+        save_movies(movies)
+        print(f"'{title}' deleted successfully!")
+    else:
+        print("Deletion cancelled.")
 
 
 def main():
@@ -213,7 +252,9 @@ def main():
         print("5. Update Rating")
         print("6. Top-Rated Movies")
         print("7. Statistics")
-        print("8. Exit")
+        print("8. Filter by Genre")
+        print("9. Delete Movie")
+        print("10. Exit")
 
         choice = input("\nEnter your choice: ").strip()
 
@@ -232,12 +273,15 @@ def main():
         elif choice == "7":
             show_statistics()
         elif choice == "8":
+            filter_genre()
+        elif choice == "9":
+            delete_movie()
+        elif choice == "10":
             print("Thanks for using MovieVault!")
             break
         else:
-            print("Invalid choice. Please select 1-8.")
+            print("Invalid choice. Please select 1-10.")
 
 
 if __name__ == "__main__":
     main()
-
